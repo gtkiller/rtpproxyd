@@ -42,6 +42,7 @@
 #endif
 
 #include "rtpp_log.h"
+#include "rtpp_netfilter.h"
 
 /*
  * Version of the command protocol, bump only when backward-incompatible
@@ -142,6 +143,8 @@ struct cfg {
 
     int log_level;
     int log_facility;
+
+    struct rtpp_netfilter nf;
 };
 
 #endif

@@ -64,6 +64,7 @@
 #include "rtpp_network.h"
 #include "rtpp_notify.h"
 #include "rtpp_util.h"
+#include "rtpp_netfilter.h"
 
 static const char *cmd_sock = CMD_SOCK;
 static const char *pid_file = PID_FILE;
@@ -393,6 +394,9 @@ init_config(struct cfg *cf, int argc, char **argv)
 	cf->bindaddr[0] = cf->bindaddr[1];
 	cf->bindaddr[1] = NULL;
     }
+
+    if (rtpp_netfilter_init(&cf->nf) < 0)
+        errx(RTPP_LOG_DBUG, cf->glog, "cannot activate netfilter");
 }
 
 static int
@@ -639,6 +643,9 @@ send_packet(struct cfg *cf, struct rtpp_session *sp, int ridx,
 	for (i = (cf->dmode && packet->size < LBR_THRS) ? 2 : 1; i > 0; i--) {
 	    sendto(sp->fds[sidx], packet->data.buf, packet->size, 0, sp->addr[sidx],
 	      SA_LEN(sp->addr[sidx]));
+
+
+            rtpp_netfilter_add_rules(&cf->nf, sp->addr, sp->laddr);
 	}
     }
 
@@ -842,6 +849,7 @@ main(int argc, char **argv)
 	    process_commands(&cf, eptime);
 	}
     }
+    rtpp_netfilter_close(&cf.nf);
 
     exit(0);
 }
