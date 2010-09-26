@@ -396,7 +396,7 @@ init_config(struct cfg *cf, int argc, char **argv)
     }
 
     if (rtpp_netfilter_init(&cf->nf) < 0)
-        errx(RTPP_LOG_DBUG, cf->glog, "cannot activate netfilter");
+        errx(1, "cannot activate netfilter");
 }
 
 static int
@@ -644,8 +644,8 @@ send_packet(struct cfg *cf, struct rtpp_session *sp, int ridx,
 	    sendto(sp->fds[sidx], packet->data.buf, packet->size, 0, sp->addr[sidx],
 	      SA_LEN(sp->addr[sidx]));
 
-
-            rtpp_netfilter_add_rules(&cf->nf, sp->addr, sp->laddr);
+            rtpp_log_write(RTPP_LOG_DBUG, sp->log, "proxying an rtp packet");
+            rtpp_netfilter_add_rules(&cf->nf, sp);
 	}
     }
 
