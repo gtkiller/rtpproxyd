@@ -31,11 +31,15 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include "rtpp_log.h"
+#include "rtpp_network.h"
+#include "rtpp_session.h"
 
 typedef struct rtpp_netfilter rtpp_netfilter;
 typedef struct sockaddr sockaddr;
 typedef struct sockaddr_in sockaddr_in;
 typedef struct sockaddr_in6 sockaddr_in6;
+typedef struct rtpp_session rtpp_session;
 
 int
 rtpp_netfilter_init(rtpp_netfilter *nf)
@@ -52,20 +56,20 @@ rtpp_netfilter_close(rtpp_netfilter *nf)
         pclose(nf->stream);
 }
 /*
--A PREROUTING -s 10.10.18.29/32 -d 188.227.5.51/32 -p udp -m udp --sp 2240 --dp 35002 -j DNAT --to-destination 192.168.17.20:16404
--A PREROUTING -s 10.10.18.29/32 -d 188.227.5.51/32 -p udp -m udp --sp 2241 --dp 35003 -j DNAT --to-destination 192.168.17.20:16405
--A PREROUTING -s 192.168.17.20/32 -d 188.227.5.51/32 -p udp -m udp --sp 16404 --dp 35000 -j DNAT --to-destination 10.10.18.29:2240
--A PREROUTING -s 192.168.17.20/32 -d 188.227.5.51/32 -p udp -m udp --sp 16405 --dp 35001 -j DNAT --to-destination 10.10.18.29:2241
+-A PREROUTING -s 10.10.18.29/32 -d 188.227.5.51/32 -p udp -m udp --sport 2240 --dport 35002 -j DNAT --to-destination 192.168.17.20:16404
+-A PREROUTING -s 10.10.18.29/32 -d 188.227.5.51/32 -p udp -m udp --sport 2241 --dport 35003 -j DNAT --to-destination 192.168.17.20:16405
+-A PREROUTING -s 192.168.17.20/32 -d 188.227.5.51/32 -p udp -m udp --sport 16404 --dport 35000 -j DNAT --to-destination 10.10.18.29:2240
+-A PREROUTING -s 192.168.17.20/32 -d 188.227.5.51/32 -p udp -m udp --sport 16405 --dport 35001 -j DNAT --to-destination 10.10.18.29:2241
 
--A POSTROUTING -s 10.10.18.29/32 -d 192.168.17.20/32 -p udp -m udp --sp 2240 --dp 16404 -j SNAT --to-source 188.227.5.51:35000
--A POSTROUTING -s 10.10.18.29/32 -d 192.168.17.20/32 -p udp -m udp --sp 2241 --dp 16405 -j SNAT --to-source 188.227.5.51:35001
--A POSTROUTING -s 192.168.17.20/32 -d 10.10.18.29/32 -p udp -m udp --sp 16405 --dp 2241 -j SNAT --to-source 188.227.5.51:35003
--A POSTROUTING -s 192.168.17.20/32 -d 10.10.18.29/32 -p udp -m udp --sp 16404 --dp 2240 -j SNAT --to-source 188.227.5.51:35002
+-A POSTROUTING -s 10.10.18.29/32 -d 192.168.17.20/32 -p udp -m udp --sport 2240 --dport 16404 -j SNAT --to-source 188.227.5.51:35000
+-A POSTROUTING -s 10.10.18.29/32 -d 192.168.17.20/32 -p udp -m udp --sport 2241 --dport 16405 -j SNAT --to-source 188.227.5.51:35001
+-A POSTROUTING -s 192.168.17.20/32 -d 10.10.18.29/32 -p udp -m udp --sport 16405 --dport 2241 -j SNAT --to-source 188.227.5.51:35003
+-A POSTROUTING -s 192.168.17.20/32 -d 10.10.18.29/32 -p udp -m udp --sport 16404 --dport 2240 -j SNAT --to-source 188.227.5.51:35002
 */
 
 static int
 rtpp_netfilter_modify_pre_rules(rtpp_netfilter *nf, char action,
-  lh1, uint16_t lp1, sh, uint16_t sp, dh, uint16_t dp)
+  char const *ilh, uint16_t ilp, char const *srch, uint16_t srcp, char const *dsth, uint16_t dstp)
 {
     char buf[200];
 
@@ -73,30 +77,32 @@ rtpp_netfilter_modify_pre_rules(rtpp_netfilter *nf, char action,
 
     int n;
     ssize_t s;
-    char const fmt[] ="-t nat -%c PREROUTING -s %s/32 -d %s/32 -p udp -m udp "
-        "--sp %u --dp %u -j dnat --to-destination %s:%u";
+    char const fmt[] ="-t nat -%c PREROUTING -s %s/32 -d %s/32 -p udstp -m udstp "
+        "--srcp %u --dstp %u -j dnat --to-destination %s:%u";
     n = snprintf(buf, sizeof(buf), fmt, action,
-        sh, lh1, sp, lp1, dh, dp);
+        srch, ilh, srcp, ilp, dsth, dstp);
     if (n >= sizeof(buf))
         return -1;
 
-    s = write(fileno(nf->stream), buf, n + 1); //todo: n + 1 or n ?
+//    s = write(fileno(nf->stream), buf, n + 1); //todo: n + 1 or n ?
     if (s < 0)
         return s;
 
     n = snprintf(buf, sizeof(buf), fmt, action,
-        sh, lh1 + 1, sp, lp1 + 1, dh, dp + 1);
+        srch, ilh + 1, srcp, ilp + 1, dsth, dstp + 1);
     if (n >= sizeof(buf))
         return -1;
 
-    s = write(fileno(nf->stream), buf, n + 1); //todo: n + 1 or n ?
+//    s = write(fileno(nf->stream), buf, n + 1); //todo: n + 1 or n ?
     if (s < 0)
         return s;
+
+    return 0;
 }
 
 static int
 rtpp_netfilter_modify_post_rules(rtpp_netfilter *nf, char action,
-  lh1, uint16_t lp1, sh, uint16_t sp, dh, uint16_t dp)
+  char const *ilh, uint16_t ilp, char const *srch, uint16_t srcp, char const *dsth, uint16_t dstp)
 {
     char buf[200];
 
@@ -104,24 +110,24 @@ rtpp_netfilter_modify_post_rules(rtpp_netfilter *nf, char action,
 
     int n;
     ssize_t s;
-    char const fmt[] ="-t nat -%c POSTROUTING -s %s/32 -d %s/32 -p udp -m udp "
-        "--sp %u --dp %u -j SNAT --to-source %s:%u";
+    char const fmt[] ="-t nat -%c POSTROUTING -s %s/32 -d %s/32 -p udstp -m udstp "
+        "--srcp %u --dstp %u -j SNAT --to-source %s:%u";
 
     n = snprintf(buf, sizeof(buf), fmt, action,
-        sh, dh, sp, dp, lh1, lp1);
+        srch, dsth, srcp, dstp, ilh, ilp);
     if (n >= sizeof(buf))
         return -1;
 
-    s = write(fileno(nf->stream), buf, n + 1); //TODO: n + 1 or n ?
+//    s = write(fileno(nf->stream), buf, n + 1); //TODO: n + 1 or n ?
     if (s < 0)
         return s;
 
     n = snprintf(buf, sizeof(buf), fmt, action,
-        sh, dh, sp + 1, dp + 1, lh1, lp1 + 1);
+        srch, dsth, srcp + 1, dstp + 1, ilh, ilp + 1);
     if (n >= sizeof(buf))
         return -1;
 
-    s = write(fileno(nf->stream), buf, n + 1); //TODO: n + 1 or n ?
+//    s = write(fileno(nf->stream), buf, n + 1); //TODO: n + 1 or n ?
     if (s < 0)
         return s;
 
@@ -130,67 +136,75 @@ rtpp_netfilter_modify_post_rules(rtpp_netfilter *nf, char action,
 //TODO: cleanup on error
 int
 add_rules(rtpp_netfilter *nf,
-  char const *sh, uint16_t sp, char const *lh1, uint16_t lp1, char const *dh, uint16_t dp)
+  char const *srch, uint16_t srcp, char const *ilh, uint16_t ilp, char const *dsth, uint16_t dstp)
 {
     if (!nf->stream)
         return -1;
 
     if (rtpp_netfilter_modify_pre_rules(nf, 'A',
-      lh1, lp1, sh, sp, dh, dp) < 0)
+      ilh, ilp, srch, srcp, dsth, dstp) < 0)
         return -1;
     if (rtpp_netfilter_modify_post_rules(nf, 'A',
-      lh1, lp1, sh, sp, dh, dp) < 0)
+      ilh, ilp, srch, srcp, dsth, dstp) < 0)
         return -1;
 
     if (rtpp_netfilter_modify_pre_rules(nf, 'A',
-      dh, dp, lh1, lp1, sh, sp) < 0)
+      dsth, dstp, ilh, ilp, srch, srcp) < 0)
         return -1;
 
     if (rtpp_netfilter_modify_post_rules(nf, 'A',
-      dh, dp, lh1, lp1, sh, sp) < 0)
+      dsth, dstp, ilh, ilp, srch, srcp) < 0)
         return -1;
+
+    return 0;
 }
 
 static int
 get_port(sockaddr const *sa)
 {
     sa_family_t const f = sa->sa_family;
+    assert(AF_INET == f || AF_INET6 == f); //TODO: remove
     if (AF_INET != f && AF_INET6 != f)
         return -1;
     return AF_INET == f ?
-      ((sockaddr_in const *) sa)->sin_port :
-      ((sockaddr_in6 const *) sa)->sin6_port;
+      ntohs(((sockaddr_in const *) sa)->sin_port) :
+      ntohs(((sockaddr_in6 const *) sa)->sin6_port);
 }
 
 int
-rtpp_netfilter_add_rules(rtpp_netfilter *nf,
-  sockaddr const *addr[2], sockaddr const *laddr[2])
+rtpp_netfilter_add_rules(rtpp_netfilter *nf, rtpp_session const *sp)
+//  sockaddr const *addr[2], sockaddr const *laddr[2], rtpp_log_t log)
 {
-    uint16_t const sp = get_port(addr[0]);
-    uint16_t const dp = get_port(addr[1]);
-    uint16_t const lp1 = get_port(laddr[0]);
-    uint16_t const lp2 = get_port(laddr[1]);
+    uint16_t const srcp = get_port(sp->addr[0]);
+    uint16_t const dstp = get_port(sp->addr[1]);
+    uint16_t const ilp = sp->ports[0];
+    uint16_t const olp = sp->ports[1];
 
     socklen_t const len = INET6_ADDRSTRLEN;
-    char sh[len], dh[len], lh1[len], lh2[len];
+    char srch[len], dsth[len], ilh[len], olh[len];
 
-    if (inet_ntop(addr[0].sa_family, addr[0], sh, sizeof(sh)) == NULL) {
+    if (addr2char_r((sockaddr *) sp->addr[0], srch, sizeof(srch)) == NULL) {
         return -1; 
     }
-    if (inet_ntop(addr[1].sa_family, addr[1], dh, sizeof(dh)) == NULL) {
+    if (addr2char_r((sockaddr *) sp->addr[1], dsth, sizeof(dsth)) == NULL) {
         return -1; 
     }
-    if (inet_ntop(laddr[0].sa_family, laddr[0], lh1, sizeof(lh1)) == NULL) {
+    if (addr2char_r((sockaddr *) sp->laddr[0], ilh, sizeof(ilh)) == NULL) {
         return -1; 
     }
-    if (inet_ntop(laddr[1].sa_family, laddr[1], lh2, sizeof(lh2)) == NULL) {
+    if (addr2char_r((sockaddr *) sp->laddr[1], olh, sizeof(olh)) == NULL) {
         return -1; 
     }
 
-    add_rules(nf, sh, sp, lh1, lp1, lh2, lp2, dh, dp);
+    rtpp_log_write(RTPP_LOG_DBUG, sp->log,
+      "s=%s:%u, il=%s:%u, ol=%s:%u, d=%s:%u",
+      srch, srcp, ilh, ilp, olh, olp, dsth, dstp);
+
+    return 0;
 }
 
 /*
 int
 rtpp_netfilter_remove();
 */
+
