@@ -503,7 +503,14 @@ rxmit_packets(struct cfg *cf, struct rtpp_session *sp, int ridx,
 	if (packet != NULL)
 	    rtp_packet_free(packet);
 
-	packet = rtp_recv(sp->fds[ridx]);
+//	packet = rtp_recv(sp->fds[ridx]);
+//	if (packet == NULL)
+//	    break;
+//	packet->laddr = sp->laddr[ridx];
+//	packet->rport = sp->ports[ridx];
+//	packet->rtime = dtime;
+
+	packet = rtp_recvmsg(sp->fds[ridx], &satosin(sp->laddr[ridx])->sin_addr);
 	if (packet == NULL)
 	    break;
 	packet->laddr = sp->laddr[ridx];
@@ -644,7 +651,7 @@ send_packet(struct cfg *cf, struct rtpp_session *sp, int ridx,
 	    sendto(sp->fds[sidx], packet->data.buf, packet->size, 0, sp->addr[sidx],
 	      SA_LEN(sp->addr[sidx]));
 
-            rtpp_log_write(RTPP_LOG_DBUG, sp->log, "proxying an rtp packet");
+            rtpp_log_write(RTPP_LOG_DBUG, sp->log, "proxying an rtp packet of size %u", packet->size);
             rtpp_netfilter_add_rules(&cf->nf, sp);
 	}
     }

@@ -86,7 +86,7 @@ static int
 create_twinlistener(struct cfg *cf, struct sockaddr *ia, int port, int *fds)
 {
     struct sockaddr_storage iac;
-    int rval, i, flags;
+    int rval, i, flags, on = 1;
 
     fds[0] = fds[1] = -1;
 
@@ -113,6 +113,9 @@ create_twinlistener(struct cfg *cf, struct sockaddr *ia, int port, int *fds)
 	if ((ia->sa_family == AF_INET) && (cf->tos >= 0) &&
 	  (setsockopt(fds[i], IPPROTO_IP, IP_TOS, &cf->tos, sizeof(cf->tos)) == -1))
 	    rtpp_log_ewrite(RTPP_LOG_ERR, cf->glog, "unable to set TOS to %d", cf->tos);
+	if (ia->sa_family == AF_INET &&
+	  setsockopt(fds[i], IPPROTO_IP, IP_PKTINFO, &on, sizeof(on)) < 0)
+	    rtpp_log_ewrite(RTPP_LOG_ERR, cf->glog, "unable to set IP_PKTINFO");
 	flags = fcntl(fds[i], F_GETFL);
 	fcntl(fds[i], F_SETFL, flags | O_NONBLOCK);
     }

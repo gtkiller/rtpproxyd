@@ -341,6 +341,51 @@ rtp_recv(int fd)
     return pkt;
 }
 
+struct rtp_packet *
+rtp_recvmsg(int fd, struct in_addr *laddr)
+{
+    struct rtp_packet *pkt;
+    struct msghdr msg;
+    struct iovec iov;
+    char ctl[CMSG_SPACE(sizeof(struct in_pktinfo))];
+
+    pkt = rtp_packet_alloc();
+
+    if (pkt == NULL)
+        return NULL;
+
+    memset(&iov, 0, sizeof(iov));
+    iov.iov_base = pkt->data.buf;
+    iov.iov_len = sizeof(pkt->data.buf);
+
+    memset(&msg, 0, sizeof(msg));
+    msg.msg_name = sstosa(&pkt->raddr);
+    msg.msg_namelen = sizeof(pkt->raddr);
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
+    msg.msg_control = ctl;
+    msg.msg_controllen = sizeof(ctl);
+
+    pkt->size = recvmsg(fd, &msg, 0);
+
+    if (pkt->size == -1) {
+        rtp_packet_free(pkt);
+        return NULL;
+    }
+    pkt->rlen = msg.msg_namelen;
+
+    if (msg.msg_controllen >= sizeof(struct cmsghdr)
+      && !(msg.msg_flags & MSG_CTRUNC)) {
+        struct cmsghdr const *c = CMSG_FIRSTHDR(&msg);
+        if (c && IPPROTO_IP == c->cmsg_level && IP_PKTINFO == c->cmsg_type) {
+            struct in_pktinfo const *info =
+              (struct in_pktinfo const *) CMSG_DATA(c);
+            memcpy(laddr, &info->ipi_spec_dst, sizeof(struct in_addr));
+        }
+    }
+    return pkt;
+}
+
 void 
 rtp_packet_set_seq(struct rtp_packet *p, uint16_t seq)
 {

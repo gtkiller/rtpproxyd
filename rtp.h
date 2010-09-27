@@ -131,6 +131,8 @@ typedef enum {
 const char *rtp_packet_parse_errstr(rtp_parser_err_t);
 rtp_parser_err_t rtp_packet_parse(struct rtp_packet *);
 struct rtp_packet *rtp_recv(int);
+struct in_addr;
+struct rtp_packet *rtp_recvmsg(int fd, struct in_addr *laddr);
 
 struct rtp_packet *rtp_packet_alloc();
 void rtp_packet_free(struct rtp_packet *);
