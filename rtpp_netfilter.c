@@ -26,6 +26,7 @@
  */
 
 #include "rtpp_netfilter.h"
+#include <unistd.h>
 #include <stdint.h>
 #include <assert.h>
 #include <string.h>
@@ -68,8 +69,9 @@ rtpp_netfilter_close(rtpp_netfilter *nf)
 */
 
 static int
-rtpp_netfilter_modify_pre_rules(rtpp_netfilter *nf, char action,
-  char const *ilh, uint16_t ilp, char const *srch, uint16_t srcp, char const *dsth, uint16_t dstp)
+modify_pre_rules(rtpp_netfilter *nf, char action,
+  char const *srch, uint16_t srcp, char const *ilh, uint16_t ilp,
+  char const *dsth, uint16_t dstp, rtpp_log_t log)
 {
     char buf[200];
 
@@ -77,23 +79,27 @@ rtpp_netfilter_modify_pre_rules(rtpp_netfilter *nf, char action,
 
     int n;
     ssize_t s;
-    char const fmt[] ="-t nat -%c PREROUTING -s %s/32 -d %s/32 -p udstp -m udstp "
-        "--srcp %u --dstp %u -j dnat --to-destination %s:%u";
+    char const fmt[] =
+        "-t nat -%c PREROUTING -s %s/32 -d %s/32 -p udp -m udp "
+        "--sport %u --dport %u -j DNAT --to-destination %s:%u";
     n = snprintf(buf, sizeof(buf), fmt, action,
         srch, ilh, srcp, ilp, dsth, dstp);
     if (n >= sizeof(buf))
         return -1;
 
-//    s = write(fileno(nf->stream), buf, n + 1); //todo: n + 1 or n ?
+    rtpp_log_write(RTPP_LOG_DBUG, log, "adding rule %s", buf);
+
+    s = write(fileno(nf->stream), buf, n + 1); //todo: n + 1 or n ?
     if (s < 0)
         return s;
 
     n = snprintf(buf, sizeof(buf), fmt, action,
-        srch, ilh + 1, srcp, ilp + 1, dsth, dstp + 1);
+        srch, ilh, srcp +1, ilp + 1, dsth, dstp + 1);
     if (n >= sizeof(buf))
         return -1;
 
-//    s = write(fileno(nf->stream), buf, n + 1); //todo: n + 1 or n ?
+    rtpp_log_write(RTPP_LOG_DBUG, log, "adding rule %s", buf);
+    s = write(fileno(nf->stream), buf, n + 1); //todo: n + 1 or n ?
     if (s < 0)
         return s;
 
@@ -101,8 +107,9 @@ rtpp_netfilter_modify_pre_rules(rtpp_netfilter *nf, char action,
 }
 
 static int
-rtpp_netfilter_modify_post_rules(rtpp_netfilter *nf, char action,
-  char const *ilh, uint16_t ilp, char const *srch, uint16_t srcp, char const *dsth, uint16_t dstp)
+modify_post_rules(rtpp_netfilter *nf, char action,
+  char const *srch, uint16_t srcp, char const *olh, uint16_t olp,
+  char const *dsth, uint16_t dstp, rtpp_log_t log)
 {
     char buf[200];
 
@@ -110,50 +117,52 @@ rtpp_netfilter_modify_post_rules(rtpp_netfilter *nf, char action,
 
     int n;
     ssize_t s;
-    char const fmt[] ="-t nat -%c POSTROUTING -s %s/32 -d %s/32 -p udstp -m udstp "
-        "--srcp %u --dstp %u -j SNAT --to-source %s:%u";
+    char const fmt[] =
+        "-t nat -%c POSTROUTING -s %s/32 -d %s/32 -p udp -m udp "
+        "--sport %u --dport %u -j SNAT --to-source %s:%u";
 
     n = snprintf(buf, sizeof(buf), fmt, action,
-        srch, dsth, srcp, dstp, ilh, ilp);
+        srch, dsth, srcp, dstp, olh, olp);
     if (n >= sizeof(buf))
         return -1;
 
-//    s = write(fileno(nf->stream), buf, n + 1); //TODO: n + 1 or n ?
+    rtpp_log_write(RTPP_LOG_DBUG, log, "adding rule %s", buf);
+    s = write(fileno(nf->stream), buf, n + 1); //TODO: n + 1 or n ?
     if (s < 0)
         return s;
 
     n = snprintf(buf, sizeof(buf), fmt, action,
-        srch, dsth, srcp + 1, dstp + 1, ilh, ilp + 1);
+        srch, dsth, srcp + 1, dstp + 1, olh, olp + 1);
     if (n >= sizeof(buf))
         return -1;
 
-//    s = write(fileno(nf->stream), buf, n + 1); //TODO: n + 1 or n ?
+    rtpp_log_write(RTPP_LOG_DBUG, log, "adding rule %s", buf);
+    s = write(fileno(nf->stream), buf, n + 1); //TODO: n + 1 or n ?
     if (s < 0)
         return s;
 
     return 0;
 }
+
 //TODO: cleanup on error
-int
+static int
 add_rules(rtpp_netfilter *nf,
-  char const *srch, uint16_t srcp, char const *ilh, uint16_t ilp, char const *dsth, uint16_t dstp)
+  char const *srch, uint16_t srcp, char const *ilh, uint16_t ilp,
+  char const *olh, uint16_t olp, char const *dsth, uint16_t dstp,
+  rtpp_log_t log)
 {
     if (!nf->stream)
         return -1;
 
-    if (rtpp_netfilter_modify_pre_rules(nf, 'A',
-      ilh, ilp, srch, srcp, dsth, dstp) < 0)
+    if (modify_pre_rules(nf, 'A', srch, srcp, ilh, ilp, dsth, dstp, log) < 0)
         return -1;
-    if (rtpp_netfilter_modify_post_rules(nf, 'A',
-      ilh, ilp, srch, srcp, dsth, dstp) < 0)
+    if (modify_post_rules(nf, 'A', srch, srcp, olh, olp, dsth, dstp, log) < 0)
         return -1;
 
-    if (rtpp_netfilter_modify_pre_rules(nf, 'A',
-      dsth, dstp, ilh, ilp, srch, srcp) < 0)
+    if (modify_pre_rules(nf, 'A', dsth, dstp, olh, olp, srch, srcp, log) < 0)
         return -1;
 
-    if (rtpp_netfilter_modify_post_rules(nf, 'A',
-      dsth, dstp, ilh, ilp, srch, srcp) < 0)
+    if (modify_post_rules(nf, 'A', dsth, dstp, ilh, ilp, srch, srcp, log) < 0)
         return -1;
 
     return 0;
@@ -200,6 +209,7 @@ rtpp_netfilter_add_rules(rtpp_netfilter *nf, rtpp_session const *sp)
       "s=%s:%u, il=%s:%u, ol=%s:%u, d=%s:%u",
       srch, srcp, ilh, ilp, olh, olp, dsth, dstp);
 
+    add_rules(nf, srch, srcp, ilh, ilp, olh, olp, dsth, dstp, sp->log);
     return 0;
 }
 
