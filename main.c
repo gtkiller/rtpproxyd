@@ -652,7 +652,7 @@ send_packet(struct cfg *cf, struct rtpp_session *sp, int ridx,
 	      SA_LEN(sp->addr[sidx]));
 
             rtpp_log_write(RTPP_LOG_DBUG, sp->log, "proxying an rtp packet of size %u", packet->size);
-            rtpp_netfilter_add_rules(&cf->nf, sp);
+            rtpp_netfilter_add(&cf->nf, sp);
 	}
     }
 

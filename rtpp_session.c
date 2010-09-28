@@ -167,6 +167,9 @@ remove_session(struct cfg *cf, struct rtpp_session *sp)
       sp->rtcp->pcount[1], sp->rtcp->pcount[2], sp->rtcp->pcount[3]);
     rtpp_log_write(RTPP_LOG_INFO, sp->log, "session on ports %d/%d is cleaned up",
       sp->ports[0], sp->ports[1]);
+
+    rtpp_netfilter_remove(&cf->nf, sp);
+
     for (i = 0; i < 2; i++) {
 	if (sp->addr[i] != NULL)
 	    free(sp->addr[i]);

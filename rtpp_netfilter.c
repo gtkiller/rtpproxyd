@@ -135,7 +135,7 @@ make_post_rules(rtpp_netfilter *nf, char *buf, size_t buflen, char action,
 }
 
 static int
-add_rules(rtpp_netfilter *nf,
+commit_rules(rtpp_netfilter *nf, char action,
   char const *srch, uint16_t srcp, char const *ilh, uint16_t ilp,
   char const *olh, uint16_t olp, char const *dsth, uint16_t dstp,
   rtpp_log_t log)
@@ -149,19 +149,19 @@ add_rules(rtpp_netfilter *nf,
         return -1;
 
     if ((cur = make_pre_rules(
-      nf, cur, last - cur, 'A', srch, srcp, ilh, ilp, dsth, dstp, log)) == NULL)
+      nf, cur, last - cur, action, srch, srcp, ilh, ilp, dsth, dstp, log)) == NULL)
         return -1;
 
     if ((cur = make_pre_rules(
-      nf, cur, last - cur, 'A', dsth, dstp, olh, olp, srch, srcp, log)) == NULL)
+      nf, cur, last - cur, action, dsth, dstp, olh, olp, srch, srcp, log)) == NULL)
         return -1;
  
     if ((cur = make_post_rules(
-      nf, cur, last - cur, 'A', srch, srcp, olh, olp, dsth, dstp, log)) == NULL)
+      nf, cur, last - cur, action, srch, srcp, olh, olp, dsth, dstp, log)) == NULL)
         return -1;
 
     if ((cur = make_post_rules(
-      nf, cur, last - cur, 'A', dsth, dstp, ilh, ilp, srch, srcp, log)) == NULL)
+      nf, cur, last - cur, action, dsth, dstp, ilh, ilp, srch, srcp, log)) == NULL)
         return -1;
 
     if (last - cur < sizeof(commit))
@@ -174,7 +174,7 @@ add_rules(rtpp_netfilter *nf,
 
     //TODO: add FORWARD rules
 
-    rtpp_log_write(RTPP_LOG_DBUG, log, "adding rules\n%s", buf);
+    rtpp_log_write(RTPP_LOG_DBUG, log, "commiting rules\n%s", buf);
     return write(fileno(nf->stream), buf, cur - buf - 1);
 }
 
@@ -191,17 +191,7 @@ get_port(sockaddr const *sa)
 }
 
 static int
-flush_conntrack(rtpp_netfilter *nf, int family, rtpp_log_t log)
-{
-    int const s = nfct_query(nf->cth, NFCT_Q_FLUSH, &family);
-    if (s < 0)
-        rtpp_log_write(RTPP_LOG_ERR, log,
-          "can't flush conntrack table, nfct_query(): ", strerror(errno));
-    return s;
-}
-
-int
-rtpp_netfilter_add_rules(rtpp_netfilter *nf, rtpp_session const *sp)
+modify_rules(rtpp_netfilter *nf, rtpp_session const *sp, char action)
 {
     int s;
     uint16_t const srcp = get_port(sp->addr[0]);
@@ -225,14 +215,31 @@ rtpp_netfilter_add_rules(rtpp_netfilter *nf, rtpp_session const *sp)
       "s=%s:%u, il=%s:%u, ol=%s:%u, d=%s:%u",
       srch, srcp, ilh, ilp, olh, olp, dsth, dstp);
 
-    s = add_rules(nf, srch, srcp, ilh, ilp, olh, olp, dsth, dstp, sp->log);
+    s = commit_rules(nf, action, srch, srcp, ilh, ilp, olh, olp, dsth, dstp, sp->log);
 
-    s = flush_conntrack(nf, AF_INET, sp->log);
     return s;
 }
 
-/*
+static int
+flush_conntrack(rtpp_netfilter *nf, int family, rtpp_log_t log)
+{
+    int const s = nfct_query(nf->cth, NFCT_Q_FLUSH, &family);
+    if (s < 0)
+        rtpp_log_write(RTPP_LOG_ERR, log,
+          "can't flush conntrack table, nfct_query(): ", strerror(errno));
+    return s;
+}
+
 int
-rtpp_netfilter_remove();
-*/
+rtpp_netfilter_add(rtpp_netfilter *nf, rtpp_session const *sp)
+{
+    modify_rules(nf, sp, 'A');
+    return flush_conntrack(nf, AF_INET, sp->log);
+}
+
+int
+rtpp_netfilter_remove(rtpp_netfilter *nf, rtpp_session const *sp)
+{
+    return modify_rules(nf, sp, 'D');
+}
 

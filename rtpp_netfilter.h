@@ -45,7 +45,11 @@ rtpp_netfilter_init(struct rtpp_netfilter *nf);
 void
 rtpp_netfilter_close(struct rtpp_netfilter *nf);
 int
-rtpp_netfilter_add_rules(struct rtpp_netfilter *nf, struct rtpp_session const *sp);
+rtpp_netfilter_add(
+  struct rtpp_netfilter *nf, struct rtpp_session const *sp);
+int
+rtpp_netfilter_remove(
+  struct rtpp_netfilter *nf, struct rtpp_session const *sp);
 
 #endif
 
