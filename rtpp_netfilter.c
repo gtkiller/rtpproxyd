@@ -56,6 +56,7 @@ rtpp_netfilter_close(rtpp_netfilter *nf)
     if (nf->stream)
         pclose(nf->stream);
 }
+
 /*
 -A PREROUTING -s 10.10.18.29/32 -d 188.227.5.51/32 -p udp -m udp --sport 2240 --dport 35002 -j DNAT --to-destination 192.168.17.20:16404
 -A PREROUTING -s 10.10.18.29/32 -d 188.227.5.51/32 -p udp -m udp --sport 2241 --dport 35003 -j DNAT --to-destination 192.168.17.20:16405
@@ -114,7 +115,6 @@ make_post_rules(rtpp_netfilter *nf, char *buf, size_t buflen, char action,
     return buf + n2 + n1;
 }
 
-//TODO: cleanup on error
 static int
 add_rules(rtpp_netfilter *nf,
   char const *srch, uint16_t srcp, char const *ilh, uint16_t ilp,
@@ -171,7 +171,6 @@ get_port(sockaddr const *sa)
 
 int
 rtpp_netfilter_add_rules(rtpp_netfilter *nf, rtpp_session const *sp)
-//  sockaddr const *addr[2], sockaddr const *laddr[2], rtpp_log_t log)
 {
     uint16_t const srcp = get_port(sp->addr[0]);
     uint16_t const dstp = get_port(sp->addr[1]);
@@ -181,25 +180,20 @@ rtpp_netfilter_add_rules(rtpp_netfilter *nf, rtpp_session const *sp)
     socklen_t const len = INET6_ADDRSTRLEN;
     char srch[len], dsth[len], ilh[len], olh[len];
 
-    if (addr2char_r((sockaddr *) sp->addr[0], srch, sizeof(srch)) == NULL) {
-        return -1; 
-    }
-    if (addr2char_r((sockaddr *) sp->addr[1], dsth, sizeof(dsth)) == NULL) {
-        return -1; 
-    }
-    if (addr2char_r((sockaddr *) sp->laddr[0], ilh, sizeof(ilh)) == NULL) {
-        return -1; 
-    }
-    if (addr2char_r((sockaddr *) sp->laddr[1], olh, sizeof(olh)) == NULL) {
-        return -1; 
-    }
+    if (addr2char_r((sockaddr *) sp->addr[0], srch, sizeof(srch)) == NULL)
+        return -1;
+    if (addr2char_r((sockaddr *) sp->addr[1], dsth, sizeof(dsth)) == NULL)
+        return -1;
+    if (addr2char_r((sockaddr *) sp->laddr[0], ilh, sizeof(ilh)) == NULL)
+        return -1;
+    if (addr2char_r((sockaddr *) sp->laddr[1], olh, sizeof(olh)) == NULL)
+        return -1;
 
     rtpp_log_write(RTPP_LOG_DBUG, sp->log,
       "s=%s:%u, il=%s:%u, ol=%s:%u, d=%s:%u",
       srch, srcp, ilh, ilp, olh, olp, dsth, dstp);
 
-    add_rules(nf, srch, srcp, ilh, ilp, olh, olp, dsth, dstp, sp->log);
-    return 0;
+    return add_rules(nf, srch, srcp, ilh, ilp, olh, olp, dsth, dstp, sp->log);
 }
 
 /*
