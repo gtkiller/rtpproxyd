@@ -27,6 +27,9 @@
 
 #include "rtpp_netfilter.h"
 #include <unistd.h>
+#include <string.h>
+#include <errno.h>
+#include <stdlib.h> // DEBUG
 #include <stdint.h>
 #include <assert.h>
 #include <string.h>
@@ -35,6 +38,7 @@
 #include "rtpp_log.h"
 #include "rtpp_network.h"
 #include "rtpp_session.h"
+#include <libnetfilter_conntrack/libnetfilter_conntrack.h>
 
 typedef struct rtpp_netfilter rtpp_netfilter;
 typedef struct sockaddr sockaddr;
@@ -153,6 +157,8 @@ add_rules(rtpp_netfilter *nf,
     cur[0] = '\0'; // Only for logging.
     assert(cur - buf < sizeof(buf));
 
+    //TODO: add FORWARD rules
+
     rtpp_log_write(RTPP_LOG_DBUG, log, "adding rules\n%s", buf);
     return write(fileno(nf->stream), buf, cur - buf - 1);
 }
@@ -169,9 +175,28 @@ get_port(sockaddr const *sa)
       ntohs(((sockaddr_in6 const *) sa)->sin6_port);
 }
 
+static int
+flush_conntrack(int family, rtpp_log_t log)
+{
+    int res;
+    struct nfct_handle *cth = nfct_open(CONNTRACK, 0);
+    if (!cth) {
+        rtpp_log_write(RTPP_LOG_ERR, log,
+          "Can't open nfct handler, nfct_open(): %s", strerror(errno));
+        return -1;
+    }
+    res = nfct_query(cth, NFCT_Q_FLUSH, &family);
+    if (res < 0)
+        rtpp_log_write(RTPP_LOG_ERR, log,
+          "Can't flush conntrack table, nfct_query(): %s", strerror(errno));
+    nfct_close(cth);
+    return res;
+}
+
 int
 rtpp_netfilter_add_rules(rtpp_netfilter *nf, rtpp_session const *sp)
 {
+    int s;
     uint16_t const srcp = get_port(sp->addr[0]);
     uint16_t const dstp = get_port(sp->addr[1]);
     uint16_t const ilp = sp->ports[0];
@@ -193,7 +218,11 @@ rtpp_netfilter_add_rules(rtpp_netfilter *nf, rtpp_session const *sp)
       "s=%s:%u, il=%s:%u, ol=%s:%u, d=%s:%u",
       srch, srcp, ilh, ilp, olh, olp, dsth, dstp);
 
-    return add_rules(nf, srch, srcp, ilh, ilp, olh, olp, dsth, dstp, sp->log);
+    s = add_rules(nf, srch, srcp, ilh, ilp, olh, olp, dsth, dstp, sp->log);
+
+    s = flush_conntrack(AF_INET, sp->log);
+    rtpp_log_write(RTPP_LOG_DBUG, sp->log, "conntrack status: %d", s);
+    return 0;
 }
 
 /*
