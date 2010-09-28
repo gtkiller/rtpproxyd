@@ -30,12 +30,15 @@
 
 #include <stdio.h>
 
+struct nfct_handle;
+struct rtpp_session;
+
 struct rtpp_netfilter
 {
     FILE *stream;
+    struct nfct_handle *cth;
 };
 
-struct rtpp_session;
 
 int
 rtpp_netfilter_init(struct rtpp_netfilter *nf);

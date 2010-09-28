@@ -50,8 +50,21 @@ int
 rtpp_netfilter_init(rtpp_netfilter *nf)
 {
     memset(nf, 0, sizeof(*nf));
+
     nf->stream = popen("/sbin/iptables-restore -n", "w");
-    return nf->stream ? 0 : -1;
+    if (!nf->stream) {
+//        rtpp_log_write(RTPP_LOG_ERR, log,
+//          "Can't popen iptables-restore, popen(): %s", strerror(errno));
+        return -1;
+    }
+    nf->cth = nfct_open(CONNTRACK, 0);
+    if (!nf->cth) {
+//        rtpp_log_write(RTPP_LOG_ERR, log,
+//          "Can't open nfct handler, nfct_open(): %s", strerror(errno));
+        pclose(nf->stream);
+        return -1;
+    }
+    return 0;
 }
 
 void
@@ -59,6 +72,8 @@ rtpp_netfilter_close(rtpp_netfilter *nf)
 {
     if (nf->stream)
         pclose(nf->stream);
+    if (nf->cth)
+        nfct_close(nf->cth);
 }
 
 /*
@@ -176,21 +191,13 @@ get_port(sockaddr const *sa)
 }
 
 static int
-flush_conntrack(int family, rtpp_log_t log)
+flush_conntrack(rtpp_netfilter *nf, int family, rtpp_log_t log)
 {
-    int res;
-    struct nfct_handle *cth = nfct_open(CONNTRACK, 0);
-    if (!cth) {
+    int const s = nfct_query(nf->cth, NFCT_Q_FLUSH, &family);
+    if (s < 0)
         rtpp_log_write(RTPP_LOG_ERR, log,
-          "Can't open nfct handler, nfct_open(): %s", strerror(errno));
-        return -1;
-    }
-    res = nfct_query(cth, NFCT_Q_FLUSH, &family);
-    if (res < 0)
-        rtpp_log_write(RTPP_LOG_ERR, log,
-          "Can't flush conntrack table, nfct_query(): %s", strerror(errno));
-    nfct_close(cth);
-    return res;
+          "can't flush conntrack table, nfct_query(): ", strerror(errno));
+    return s;
 }
 
 int
@@ -220,9 +227,8 @@ rtpp_netfilter_add_rules(rtpp_netfilter *nf, rtpp_session const *sp)
 
     s = add_rules(nf, srch, srcp, ilh, ilp, olh, olp, dsth, dstp, sp->log);
 
-    s = flush_conntrack(AF_INET, sp->log);
-    rtpp_log_write(RTPP_LOG_DBUG, sp->log, "conntrack status: %d", s);
-    return 0;
+    s = flush_conntrack(nf, AF_INET, sp->log);
+    return s;
 }
 
 /*
