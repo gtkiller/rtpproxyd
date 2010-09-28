@@ -69,7 +69,7 @@ rtpp_netfilter_close(rtpp_netfilter *nf)
 */
 
 static char *
-modify_pre_rules(rtpp_netfilter *nf, char *buf, size_t buflen, char action,
+make_pre_rules(rtpp_netfilter *nf, char *buf, size_t buflen, char action,
   char const *srch, uint16_t srcp, char const *ilh, uint16_t ilp,
   char const *dsth, uint16_t dstp, rtpp_log_t log)
 {
@@ -92,7 +92,7 @@ modify_pre_rules(rtpp_netfilter *nf, char *buf, size_t buflen, char action,
 }
 
 static char *
-modify_post_rules(rtpp_netfilter *nf, char *buf, size_t buflen, char action,
+make_post_rules(rtpp_netfilter *nf, char *buf, size_t buflen, char action,
   char const *srch, uint16_t srcp, char const *olh, uint16_t olp,
   char const *dsth, uint16_t dstp, rtpp_log_t log)
 {
@@ -129,19 +129,19 @@ add_rules(rtpp_netfilter *nf,
     if (!nf->stream)
         return -1;
 
-    if ((cur = modify_pre_rules(
+    if ((cur = make_pre_rules(
       nf, cur, last - cur, 'A', srch, srcp, ilh, ilp, dsth, dstp, log)) == NULL)
         return -1;
 
-    if ((cur = modify_pre_rules(
+    if ((cur = make_pre_rules(
       nf, cur, last - cur, 'A', dsth, dstp, olh, olp, srch, srcp, log)) == NULL)
         return -1;
-
-    if ((cur = modify_post_rules(
+ 
+    if ((cur = make_post_rules(
       nf, cur, last - cur, 'A', srch, srcp, olh, olp, dsth, dstp, log)) == NULL)
         return -1;
 
-    if ((cur = modify_post_rules(
+    if ((cur = make_post_rules(
       nf, cur, last - cur, 'A', dsth, dstp, ilh, ilp, srch, srcp, log)) == NULL)
         return -1;
 
