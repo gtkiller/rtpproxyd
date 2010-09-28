@@ -68,80 +68,50 @@ rtpp_netfilter_close(rtpp_netfilter *nf)
 -A POSTROUTING -s 192.168.17.20/32 -d 10.10.18.29/32 -p udp -m udp --sport 16404 --dport 2240 -j SNAT --to-source 188.227.5.51:35002
 */
 
-static int
-modify_pre_rules(rtpp_netfilter *nf, char action,
+static char *
+modify_pre_rules(rtpp_netfilter *nf, char *buf, size_t buflen, char action,
   char const *srch, uint16_t srcp, char const *ilh, uint16_t ilp,
   char const *dsth, uint16_t dstp, rtpp_log_t log)
 {
-    char buf[200];
-
-    assert(nf->stream);
-
-    int n;
-    ssize_t s;
+    int n1, n2;
     char const fmt[] =
-        "-t nat -%c PREROUTING -s %s/32 -d %s/32 -p udp -m udp "
-        "--sport %u --dport %u -j DNAT --to-destination %s:%u";
-    n = snprintf(buf, sizeof(buf), fmt, action,
+        "-%c PREROUTING -s %s/32 -d %s/32 -p udp -m udp "
+        "--sport %u --dport %u -j DNAT --to-destination %s:%u\n";
+
+    n1 = snprintf(buf, buflen, fmt, action,
         srch, ilh, srcp, ilp, dsth, dstp);
-    if (n >= sizeof(buf))
-        return -1;
+    if (n1 >= buflen)
+        return NULL;
 
-    rtpp_log_write(RTPP_LOG_DBUG, log, "adding rule %s", buf);
-
-    s = write(fileno(nf->stream), buf, n + 1); //todo: n + 1 or n ?
-    if (s < 0)
-        return s;
-
-    n = snprintf(buf, sizeof(buf), fmt, action,
+    n2 = snprintf(buf + n1, buflen - n1, fmt, action,
         srch, ilh, srcp +1, ilp + 1, dsth, dstp + 1);
-    if (n >= sizeof(buf))
-        return -1;
+    if (n2 >= buflen - n1)
+        return NULL;
 
-    rtpp_log_write(RTPP_LOG_DBUG, log, "adding rule %s", buf);
-    s = write(fileno(nf->stream), buf, n + 1); //todo: n + 1 or n ?
-    if (s < 0)
-        return s;
-
-    return 0;
+    return buf + n2 + n1;
 }
 
-static int
-modify_post_rules(rtpp_netfilter *nf, char action,
+static char *
+modify_post_rules(rtpp_netfilter *nf, char *buf, size_t buflen, char action,
   char const *srch, uint16_t srcp, char const *olh, uint16_t olp,
   char const *dsth, uint16_t dstp, rtpp_log_t log)
 {
-    char buf[200];
-
-    assert(nf->stream);
-
-    int n;
-    ssize_t s;
+    int n1, n2;
     char const fmt[] =
-        "-t nat -%c POSTROUTING -s %s/32 -d %s/32 -p udp -m udp "
-        "--sport %u --dport %u -j SNAT --to-source %s:%u";
+        "-%c POSTROUTING -s %s/32 -d %s/32 -p udp -m udp "
+        "--sport %u --dport %u -j SNAT --to-source %s:%u\n";
 
-    n = snprintf(buf, sizeof(buf), fmt, action,
+    n1 = snprintf(buf, buflen, fmt, action,
         srch, dsth, srcp, dstp, olh, olp);
-    if (n >= sizeof(buf))
-        return -1;
+    if (n1 >= buflen)
+        return NULL;
 
-    rtpp_log_write(RTPP_LOG_DBUG, log, "adding rule %s", buf);
-    s = write(fileno(nf->stream), buf, n + 1); //TODO: n + 1 or n ?
-    if (s < 0)
-        return s;
-
-    n = snprintf(buf, sizeof(buf), fmt, action,
+    n2 = snprintf(buf + n1, buflen - n1, fmt, action,
         srch, dsth, srcp + 1, dstp + 1, olh, olp + 1);
-    if (n >= sizeof(buf))
-        return -1;
+    if (n2 >= buflen - n1)
+        return NULL;
 
-    rtpp_log_write(RTPP_LOG_DBUG, log, "adding rule %s", buf);
-    s = write(fileno(nf->stream), buf, n + 1); //TODO: n + 1 or n ?
-    if (s < 0)
-        return s;
-
-    return 0;
+    return buf + n2 + n1;
 }
 
 //TODO: cleanup on error
@@ -151,21 +121,40 @@ add_rules(rtpp_netfilter *nf,
   char const *olh, uint16_t olp, char const *dsth, uint16_t dstp,
   rtpp_log_t log)
 {
+    char const commit[] = "COMMIT\n";
+    char buf[2048] = "*nat\n";
+    char *cur = buf + sizeof("*nat\n") - 1;
+    char *last = buf + sizeof(buf);
+
     if (!nf->stream)
         return -1;
 
-    if (modify_pre_rules(nf, 'A', srch, srcp, ilh, ilp, dsth, dstp, log) < 0)
-        return -1;
-    if (modify_post_rules(nf, 'A', srch, srcp, olh, olp, dsth, dstp, log) < 0)
-        return -1;
-
-    if (modify_pre_rules(nf, 'A', dsth, dstp, olh, olp, srch, srcp, log) < 0)
+    if ((cur = modify_pre_rules(
+      nf, cur, last - cur, 'A', srch, srcp, ilh, ilp, dsth, dstp, log)) == NULL)
         return -1;
 
-    if (modify_post_rules(nf, 'A', dsth, dstp, ilh, ilp, srch, srcp, log) < 0)
+    if ((cur = modify_pre_rules(
+      nf, cur, last - cur, 'A', dsth, dstp, olh, olp, srch, srcp, log)) == NULL)
         return -1;
 
-    return 0;
+    if ((cur = modify_post_rules(
+      nf, cur, last - cur, 'A', srch, srcp, olh, olp, dsth, dstp, log)) == NULL)
+        return -1;
+
+    if ((cur = modify_post_rules(
+      nf, cur, last - cur, 'A', dsth, dstp, ilh, ilp, srch, srcp, log)) == NULL)
+        return -1;
+
+    if (last - cur < sizeof(commit))
+        return -1;
+
+    memcpy(cur, commit, sizeof(commit));
+    cur += sizeof(commit);
+    cur[0] = '\0'; // Only for logging.
+    assert(cur - buf < sizeof(buf));
+
+    rtpp_log_write(RTPP_LOG_DBUG, log, "adding rules\n%s", buf);
+    return write(fileno(nf->stream), buf, cur - buf - 1);
 }
 
 static int
