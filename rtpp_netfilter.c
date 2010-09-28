@@ -134,6 +134,23 @@ make_post_rules(rtpp_netfilter *nf, char *buf, size_t buflen, char action,
     return buf + n2 + n1;
 }
 
+static char *
+make_fwd_rules(rtpp_netfilter *nf, char *buf, size_t buflen,
+  char const *srch, uint16_t srcp,
+  char const *dsth, uint16_t dstp, rtpp_log_t log)
+{
+    int n;
+    char const fmt[] =
+        "-A FORWARD -s %s/32 -d %s/32 -p udp -m udp "
+        "--sport %u --dport %u -j ACCEPT\n";
+
+    n = snprintf(buf, buflen, fmt, srch, dsth, srcp, dstp);
+    if (n >= buflen)
+        return NULL;
+
+    return buf + n;
+}
+
 static int
 commit_rules(rtpp_netfilter *nf, char action,
   char const *srch, uint16_t srcp, char const *ilh, uint16_t ilp,
@@ -141,6 +158,7 @@ commit_rules(rtpp_netfilter *nf, char action,
   rtpp_log_t log)
 {
     char const commit[] = "COMMIT\n";
+    char const filter[] = "*filter\n";
     char buf[2048] = "*nat\n";
     char *cur = buf + sizeof("*nat\n") - 1;
     char *last = buf + sizeof(buf);
@@ -164,15 +182,32 @@ commit_rules(rtpp_netfilter *nf, char action,
       nf, cur, last - cur, action, dsth, dstp, ilh, ilp, srch, srcp, log)) == NULL)
         return -1;
 
+    if (last - cur < sizeof(filter))
+        return -1;
+
+    if (last - cur < sizeof(commit))
+        return -1;
+    memcpy(cur, commit, sizeof(commit));
+    cur += sizeof(commit) - 1;
+
+    memcpy(cur, filter, sizeof(filter));
+    cur += sizeof(filter) - 1;
+    if ((cur = make_fwd_rules(
+      nf, cur, last - cur, srch, srcp, dsth, dstp, log)) == NULL)
+        return -1;
+
+    if ((cur = make_fwd_rules(
+      nf, cur, last - cur, dsth, dstp, srch, srcp, log)) == NULL)
+        return -1;
+
     if (last - cur < sizeof(commit))
         return -1;
 
     memcpy(cur, commit, sizeof(commit));
     cur += sizeof(commit);
+
     cur[0] = '\0'; // Only for logging.
     assert(cur - buf < sizeof(buf));
-
-    //TODO: add FORWARD rules
 
     rtpp_log_write(RTPP_LOG_DBUG, log, "commiting rules\n%s", buf);
     return write(fileno(nf->stream), buf, cur - buf - 1);
