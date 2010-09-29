@@ -212,20 +212,10 @@ commit_rules(rtpp_netfilter *nf, char action,
 }
 
 static int
-get_port(sockaddr const *sa)
-{
-    sa_family_t const f = sa->sa_family;
-    assert(AF_INET == f || AF_INET6 == f);
-    return AF_INET == f ?
-      ntohs(((sockaddr_in const *) sa)->sin_port) :
-      ntohs(((sockaddr_in6 const *) sa)->sin6_port);
-}
-
-static int
 modify_rules(rtpp_netfilter *nf, rtpp_session const *sp, char action)
 {
-    uint16_t const srcp = get_port(sp->addr[0]);
-    uint16_t const dstp = get_port(sp->addr[1]);
+    uint16_t const srcp = addr2port(sp->addr[0]);
+    uint16_t const dstp = addr2port(sp->addr[1]);
     uint16_t const ilp = sp->ports[0];
     uint16_t const olp = sp->ports[1];
 
