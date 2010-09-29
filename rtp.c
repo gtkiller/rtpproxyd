@@ -376,11 +376,13 @@ rtp_recvmsg(int fd, struct in_addr *laddr)
 
     if (msg.msg_controllen >= sizeof(struct cmsghdr)
       && !(msg.msg_flags & MSG_CTRUNC)) {
-        struct cmsghdr const *c = CMSG_FIRSTHDR(&msg);
-        if (c && IPPROTO_IP == c->cmsg_level && IP_PKTINFO == c->cmsg_type) {
-            struct in_pktinfo const *info =
-              (struct in_pktinfo const *) CMSG_DATA(c);
-            memcpy(laddr, &info->ipi_spec_dst, sizeof(struct in_addr));
+        struct cmsghdr *c = CMSG_FIRSTHDR(&msg);
+        for (; c; c = CMSG_NXTHDR(&msg, c)) {
+            if (IPPROTO_IP == c->cmsg_level && IP_PKTINFO == c->cmsg_type) {
+                struct in_pktinfo const *info =
+                  (struct in_pktinfo const *) CMSG_DATA(c);
+                memcpy(laddr, &info->ipi_spec_dst, sizeof(struct in_addr));
+            }
         }
     }
     return pkt;
