@@ -135,16 +135,16 @@ make_post_rules(rtpp_netfilter *nf, char *buf, size_t buflen, char action,
 }
 
 static char *
-make_fwd_rules(rtpp_netfilter *nf, char *buf, size_t buflen,
+make_fwd_rules(rtpp_netfilter *nf, char *buf, size_t buflen, char action,
   char const *srch, uint16_t srcp,
   char const *dsth, uint16_t dstp, rtpp_log_t log)
 {
     int n;
     char const fmt[] =
-        "-A FORWARD -s %s/32 -d %s/32 -p udp -m udp "
+        "-%c FORWARD -s %s/32 -d %s/32 -p udp -m udp "
         "--sport %u --dport %u -j ACCEPT\n";
 
-    n = snprintf(buf, buflen, fmt, srch, dsth, srcp, dstp);
+    n = snprintf(buf, buflen, fmt, action, srch, dsth, srcp, dstp);
     if (n >= buflen)
         return NULL;
 
@@ -193,11 +193,11 @@ commit_rules(rtpp_netfilter *nf, char action,
     memcpy(cur, filter, sizeof(filter));
     cur += sizeof(filter) - 1;
     if ((cur = make_fwd_rules(
-      nf, cur, last - cur, srch, srcp, dsth, dstp, log)) == NULL)
+      nf, cur, last - cur, action, srch, srcp, dsth, dstp, log)) == NULL)
         return -1;
 
     if ((cur = make_fwd_rules(
-      nf, cur, last - cur, dsth, dstp, srch, srcp, log)) == NULL)
+      nf, cur, last - cur, action, dsth, dstp, srch, srcp, log)) == NULL)
         return -1;
 
     if (last - cur < sizeof(commit))
