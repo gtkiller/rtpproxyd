@@ -29,7 +29,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
-#include <stdlib.h> // DEBUG
+#include <stdlib.h>
 #include <stdint.h>
 #include <assert.h>
 #include <string.h>
@@ -49,8 +49,6 @@ typedef struct rtpp_session rtpp_session;
 int
 rtpp_netfilter_init(rtpp_netfilter *nf)
 {
-    memset(nf, 0, sizeof(*nf));
-
     nf->stream = popen("/sbin/iptables-restore -n", "w");
     if (!nf->stream) {
 //        rtpp_log_write(RTPP_LOG_ERR, log,
@@ -228,7 +226,6 @@ get_port(sockaddr const *sa)
 static int
 modify_rules(rtpp_netfilter *nf, rtpp_session const *sp, char action)
 {
-    int s;
     uint16_t const srcp = get_port(sp->addr[0]);
     uint16_t const dstp = get_port(sp->addr[1]);
     uint16_t const ilp = sp->ports[0];
@@ -250,9 +247,7 @@ modify_rules(rtpp_netfilter *nf, rtpp_session const *sp, char action)
       "s=%s:%u, il=%s:%u, ol=%s:%u, d=%s:%u",
       srch, srcp, ilh, ilp, olh, olp, dsth, dstp);
 
-    s = commit_rules(nf, action, srch, srcp, ilh, ilp, olh, olp, dsth, dstp, sp->log);
-
-    return s;
+    return commit_rules(nf, action, srch, srcp, ilh, ilp, olh, olp, dsth, dstp, sp->log);
 }
 
 static int
