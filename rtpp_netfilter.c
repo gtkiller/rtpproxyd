@@ -93,7 +93,7 @@ make_pre_rules(rtpp_netfilter *nf, char *buf, size_t buflen, char action,
 {
     int n1, n2;
     char const fmt[] =
-        "-%c PREROUTING -s %s/32 -d %s/32 -p udp -m udp "
+        "-%c PREROUTING -s %s -d %s -p udp -m udp "
         "--sport %u --dport %u -j DNAT --to-destination %s:%u\n";
 
     n1 = snprintf(buf, buflen, fmt, action,
@@ -116,7 +116,7 @@ make_post_rules(rtpp_netfilter *nf, char *buf, size_t buflen, char action,
 {
     int n1, n2;
     char const fmt[] =
-        "-%c POSTROUTING -s %s/32 -d %s/32 -p udp -m udp "
+        "-%c POSTROUTING -s %s -d %s -p udp -m udp "
         "--sport %u --dport %u -j SNAT --to-source %s:%u\n";
 
     n1 = snprintf(buf, buflen, fmt, action,
@@ -139,7 +139,7 @@ make_fwd_rules(rtpp_netfilter *nf, char *buf, size_t buflen, char action,
 {
     int n;
     char const fmt[] =
-        "-%c FORWARD -s %s/32 -d %s/32 -p udp -m udp "
+        "-%c FORWARD -s %s -d %s -p udp -m udp "
         "--sport %u --dport %u -j ACCEPT\n";
 
     n = snprintf(buf, buflen, fmt, action, srch, dsth, srcp, dstp);
