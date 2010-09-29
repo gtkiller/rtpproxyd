@@ -51,13 +51,13 @@ rtpp_netfilter_init(rtpp_netfilter *nf)
 {
     nf->stream = popen("/sbin/iptables-restore -n", "w");
     if (!nf->stream) {
-//        rtpp_log_write(RTPP_LOG_ERR, log,
+//        rtpp_log_ewrite(RTPP_LOG_ERR, log,
 //          "Can't popen iptables-restore, popen(): %s", strerror(errno));
         return -1;
     }
     nf->cth = nfct_open(CONNTRACK, 0);
     if (!nf->cth) {
-//        rtpp_log_write(RTPP_LOG_ERR, log,
+//        rtpp_log_ewrite(RTPP_LOG_ERR, log,
 //          "Can't open nfct handler, nfct_open(): %s", strerror(errno));
         pclose(nf->stream);
         return -1;
@@ -215,9 +215,7 @@ static int
 get_port(sockaddr const *sa)
 {
     sa_family_t const f = sa->sa_family;
-    assert(AF_INET == f || AF_INET6 == f); //TODO: remove
-    if (AF_INET != f && AF_INET6 != f)
-        return -1;
+    assert(AF_INET == f || AF_INET6 == f);
     return AF_INET == f ?
       ntohs(((sockaddr_in const *) sa)->sin_port) :
       ntohs(((sockaddr_in6 const *) sa)->sin6_port);
@@ -255,7 +253,7 @@ flush_conntrack(rtpp_netfilter *nf, int family, rtpp_log_t log)
 {
     int const s = nfct_query(nf->cth, NFCT_Q_FLUSH, &family);
     if (s < 0)
-        rtpp_log_write(RTPP_LOG_ERR, log,
+        rtpp_log_ewrite(RTPP_LOG_ERR, log,
           "can't flush conntrack table, nfct_query(): ", strerror(errno));
     return s;
 }
